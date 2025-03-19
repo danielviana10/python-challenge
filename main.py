@@ -9,279 +9,435 @@ TITLE = "Platformer Game"
 
 # Gravidade e movimento
 GRAVITY = 0.4
-VELOCIDADE_PULO = -10
-VELOCIDADE_MOVIMENTO = 150  # Pixels por segundo
-ANIMACAO_INTERVALO = 0.2  # Segundos entre cada frame de animação
+JUMP_VELOCITY = -10
+MOVE_VELOCITY = 150  # Pixels por segundo
+ANIMATION_INTERVAL = 0.2  # Segundos entre cada frame de animação
 
 # Estados do jogo
 MENU = 0
-JOGANDO = 1
-estado = MENU
-tempo_ataque = 0
-
-# Sprites
-heroi = Actor('adventurer/adventurer_idle', (WIDTH // 2, HEIGHT - 100))
-heroi.velocidade_y = 0
-heroi.no_chao = False
-heroi.ultima_animacao_tempo = 0
-heroi.frame_animacao = 0
-heroi.socando = False  # Estado de soco
-heroi.direcao = 1  # 1 para direita, -1 para esquerda
-heroi_agarrado = False
-inimigos = []
-sprites_heroi_idle_direita = ['adventurer/adventurer_idle', 'adventurer/adventurer_stand']
-sprites_heroi_idle_esquerda = ['adventurer/adventurer_idle_left', 'adventurer/adventurer_stand_left']
-sprites_heroi_mover_direita = ['adventurer/adventurer_walk1', 'adventurer/adventurer_walk2']
-sprites_heroi_mover_esquerda = ['adventurer/adventurer_walk1_left', 'adventurer/adventurer_walk2_left']
-sprites_heroi_pulo_direita = ['adventurer/adventurer_jump']
-sprites_heroi_pulo_esquerda = ['adventurer/adventurer_jump_left']
-sprites_heroi_soco_direita = ['adventurer/adventurer_action2', 'adventurer/adventurer_action2']
-sprites_heroi_soco_esquerda = ['adventurer/adventurer_action2_left', 'adventurer/adventurer_action2_left']
-sprites_heroi_hurt = ['adventurer/adventurer_hurt']  # Sprite de herói ferido (direita)
-sprites_heroi_hurt_esquerda = ['adventurer/adventurer_hurt_left']  # Sprite de herói ferido (esquerda)
-
-# Sprites dos zumbis
-sprites_inimigo_idle_direita = ['zombie/zombie_idle', 'zombie/zombie_stand']
-sprites_inimigo_idle_esquerda = ['zombie/zombie_idle_left', 'zombie/zombie_stand_left']
-sprites_inimigo_mover_direita = ['zombie/zombie_walk1', 'zombie/zombie_walk2']
-sprites_inimigo_mover_esquerda = ['zombie/zombie_walk1_left', 'zombie/zombie_walk2_left']
-sprites_inimigo_ferido = ['zombie/zombie_hurt']
-sprites_inimigo_hold_direita = ['zombie/zombie_hold1']
-sprites_inimigo_hold_esquerda = ['zombie/zombie_hold1_left']
+PLAYING = 1
+state = MENU
+selected_option = 0
+attack_time = 0
+show_mission = True
+mission_time = 0
+victory = False
+defeat = False
 
 # Plataformas
-PLATAFORMAS = [
+PLATFORMS = [
     Rect(0, HEIGHT - 40, WIDTH, 40),  # Chão
-    Rect(180, HEIGHT - 250, 200, 20),  # Plataforma 1
-    Rect(500, HEIGHT - 150, 200, 20),  # Plataforma 2
-    Rect(820, HEIGHT - 250, 200, 20),  # Plataforma 3
+    Rect(180, HEIGHT - 300, 200, 20),  # Plataforma 1
+    Rect(500, HEIGHT - 180, 200, 20),  # Plataforma 2
+    Rect(820, HEIGHT - 300, 200, 20),  # Plataforma 3
 ]
 
 # Música e sons
-musica_ligada = True
-som_ligado = True
+music_on = True
+sound_on = True
+
+
+# Classe para o Herói
+class Hero:
+    def __init__(self, x, y):
+        self.actor = Actor('adventurer/adventurer_idle', (x, y))
+        self.velocity_y = 0
+        self.on_ground = False
+        self.last_animation_time = 0
+        self.animation_frame = 0
+        self.punching = False
+        self.direction = 1  # 1 para direita, -1 para esquerda
+        self.grabbed = False
+        self.crouching = False
+
+        # Sprites do herói
+        self.idle_right_sprites = ['adventurer/adventurer_idle', 'adventurer/adventurer_stand']
+        self.idle_left_sprites = ['adventurer/adventurer_idle_left', 'adventurer/adventurer_stand_left']
+        self.move_right_sprites = ['adventurer/adventurer_walk1', 'adventurer/adventurer_walk2']
+        self.move_left_sprites = ['adventurer/adventurer_walk1_left', 'adventurer/adventurer_walk2_left']
+        self.jump_right_sprites = ['adventurer/adventurer_jump']
+        self.jump_left_sprites = ['adventurer/adventurer_jump_left']
+        self.punch_right_sprites = ['adventurer/adventurer_action2', 'adventurer/adventurer_action2']
+        self.punch_left_sprites = ['adventurer/adventurer_action2_left', 'adventurer/adventurer_action2_left']
+        self.hurt_sprites = ['adventurer/adventurer_hurt']
+        self.hurt_left_sprites = ['adventurer/adventurer_hurt_left']
+        self.crouch_right_sprites = ['adventurer/adventurer_duck']
+        self.crouch_left_sprites = ['adventurer/adventurer_duck_left']
+
+    def update(self, dt):
+        if state != PLAYING or self.grabbed:
+            return
+
+        # Agachar
+        if keyboard.down:
+            self.crouching = True
+            if self.direction == -1:
+                self.actor.image = self.crouch_left_sprites[0]
+            else:
+                self.actor.image = self.crouch_right_sprites[0]
+        else:
+            self.crouching = False
+
+        # Movimento horizontal
+        if keyboard.left and not self.crouching:
+            self.actor.x -= MOVE_VELOCITY * dt
+            self.direction = -1
+            if self.on_ground and not self.punching:
+                self.animate(self.move_left_sprites, dt)
+        elif keyboard.right and not self.crouching:
+            self.actor.x += MOVE_VELOCITY * dt
+            self.direction = 1
+            if self.on_ground and not self.punching:
+                self.animate(self.move_right_sprites, dt)
+        elif self.on_ground and not self.punching and not self.crouching:
+            if self.direction == -1:
+                self.animate(self.idle_left_sprites, dt)
+            else:
+                self.animate(self.idle_right_sprites, dt)
+
+        # Gravidade e pulo
+        self.velocity_y += GRAVITY
+        self.actor.y += self.velocity_y
+
+        # Verificar colisão com plataformas
+        self.on_ground = False
+        for platform in PLATFORMS:
+            if self.actor.colliderect(platform) and self.velocity_y > 0:
+                self.velocity_y = 0
+                self.actor.bottom = platform.top
+                self.on_ground = True
+
+        # Pulo
+        if keyboard.up and self.on_ground and not self.crouching:
+            self.velocity_y = JUMP_VELOCITY
+            if self.direction == -1:
+                self.actor.image = self.jump_left_sprites[0]
+            else:
+                self.actor.image = self.jump_right_sprites[0]
+
+        # Atualizar animação de soco
+        if self.punching:
+            self.animate_punch(dt)
+
+    def animate(self, sprites, dt):
+        self.last_animation_time += dt
+        if self.last_animation_time >= ANIMATION_INTERVAL:
+            self.last_animation_time = 0
+            self.animation_frame = (self.animation_frame + 1) % len(sprites)
+            self.actor.image = sprites[self.animation_frame]
+
+    def animate_punch(self, dt):
+        global enemies
+        self.last_animation_time += dt
+        if self.last_animation_time >= ANIMATION_INTERVAL:
+            self.last_animation_time = 0
+            self.animation_frame += 1
+            if self.animation_frame < len(self.punch_right_sprites):
+                if self.direction == -1:
+                    self.actor.image = self.punch_left_sprites[self.animation_frame]
+                else:
+                    self.actor.image = self.punch_right_sprites[self.animation_frame]
+
+                # Verificar colisão com inimigos
+                for enemy in enemies:
+                    if self.actor.colliderect(enemy.actor):
+                        enemy.hurt()
+            else:
+                self.punching = False
+                self.animation_frame = 0
+                if self.direction == -1:
+                    self.actor.image = self.idle_left_sprites[0]
+                else:
+                    self.actor.image = self.idle_right_sprites[0]
+
+
+# Classe para os Inimigos
+class Enemy:
+    def __init__(self, x, y):
+        self.actor = Actor('zombie/zombie_idle', (x, y))
+        self.direction = random.choice([-1, 1])
+        self.last_animation_time = 0
+        self.animation_frame = 0
+        self.state = "moving"
+        self.state_time = 0
+        self.hurt_time = 0
+
+        # Sprites do inimigo
+        self.idle_right_sprites = ['zombie/zombie_idle', 'zombie/zombie_stand']
+        self.idle_left_sprites = ['zombie/zombie_idle_left', 'zombie/zombie_stand_left']
+        self.move_right_sprites = ['zombie/zombie_walk1', 'zombie/zombie_walk2']
+        self.move_left_sprites = ['zombie/zombie_walk1_left', 'zombie/zombie_walk2_left']
+        self.hurt_right_sprites = ['zombie/zombie_hurt']
+        self.hurt_left_sprites = ['zombie/zombie_hurt_left']
+        self.hold_right_sprites = ['zombie/zombie_hold1']
+        self.hold_left_sprites = ['zombie/zombie_hold1_left']
+
+    def update(self, dt):
+        if self.state == "hurt":
+            self.hurt_time += dt
+            if self.hurt_time >= 1.0:
+                enemies.remove(self)
+        elif self.state == "hold":
+            if self.direction == -1:
+                self.actor.image = self.hold_left_sprites[0]
+            else:
+                self.actor.image = self.hold_right_sprites[0]
+
+            # Manter o herói agarrado
+            if hero.grabbed:
+                hero.actor.x = self.actor.x + (20 if self.direction == 1 else -20)
+                hero.actor.y = self.actor.y
+                if self.direction == -1:
+                    hero.actor.image = hero.hurt_left_sprites[0]
+                else:
+                    hero.actor.image = hero.hurt_sprites[0]
+        else:
+            self.state_time += dt
+            if self.state_time >= 5:
+                self.state_time = 0
+                self.state = "idle" if self.state == "moving" else "moving"
+
+            if self.state == "moving":
+                self.actor.x += self.direction * MOVE_VELOCITY * dt
+                if self.actor.right > WIDTH:
+                    self.actor.right = WIDTH
+                    self.direction *= -1
+                elif self.actor.left < 0:
+                    self.actor.left = 0
+                    self.direction *= -1
+                if self.direction == -1:
+                    self.animate(self.move_left_sprites, dt)
+                else:
+                    self.animate(self.move_right_sprites, dt)
+            else:
+                if self.direction == -1:
+                    self.animate(self.idle_left_sprites, dt)
+                else:
+                    self.animate(self.idle_right_sprites, dt)
+
+            # Verificar se o herói está próximo o suficiente para ser agarrado
+            if not hero.grabbed and abs(hero.actor.x - self.actor.x) < 50 and abs(hero.actor.y - self.actor.y) < 50:
+                if not hero.crouching:  # Só capturar se o herói não estiver agachado
+                    self.state = "hold"  # Mudar para estado de "hold"
+                    self.direction = 1 if hero.actor.x > self.actor.x else -1  # Direção do zumbi ao agarrar
+                    hero.grabbed = True  # Marcar o herói como agarrado
+                    global attack_time
+                    attack_time = 0  # Reiniciar o contador de tempo de ataque
+
+    def animate(self, sprites, dt):
+        self.last_animation_time += dt
+        if self.last_animation_time >= ANIMATION_INTERVAL:
+            self.last_animation_time = 0
+            self.animation_frame = (self.animation_frame + 1) % len(sprites)
+            self.actor.image = sprites[self.animation_frame]
+
+    def hurt(self):
+        if self.direction == -1:
+            self.actor.image = self.hurt_left_sprites[0]
+        else:
+            self.actor.image = self.hurt_right_sprites[0]
+        self.state = "hurt"
+        self.hurt_time = 0
+
+
+# Instâncias do herói e inimigos
+hero = Hero(WIDTH // 2, HEIGHT - 100)
+enemies = []
+
 
 def draw():
     screen.clear()
-    if estado == MENU:
-        desenhar_menu()
-    elif estado == JOGANDO:
-        desenhar_jogo()
+    if state == MENU:
+        draw_menu()
+    elif state == PLAYING:
+        if defeat:
+            draw_defeat()
+        elif victory:  # Verificar se o jogador venceu
+            draw_victory()
+        elif show_mission:
+            draw_mission()
+        else:
+            draw_game()
 
-def desenhar_menu():
+
+def draw_menu():
+    screen.clear()
     screen.draw.text("Platformer Game", center=(WIDTH // 2, HEIGHT // 4), fontsize=60, color="white")
-    screen.draw.text("1. Começar o jogo", center=(WIDTH // 2, HEIGHT // 2), fontsize=40, color="white")
-    screen.draw.text("2. Música: " + ("Ligada" if musica_ligada else "Desligada"), center=(WIDTH // 2, HEIGHT // 2 + 50), fontsize=40, color="white")
-    screen.draw.text("3. Sair", center=(WIDTH // 2, HEIGHT // 2 + 100), fontsize=40, color="white")
 
-def desenhar_jogo():
-    for plataforma in PLATAFORMAS:
-        screen.draw.filled_rect(plataforma, (100, 100, 100))
-    heroi.draw()
-    for inimigo in inimigos:
-        inimigo.draw()
+    # Opções do menu
+    options = [
+        "Start Game",
+        "Music: " + ("On" if music_on else "Off"),
+        "Quit"
+    ]
+
+    # Desenhar as opções
+    for i, option in enumerate(options):
+        color = "yellow" if i == selected_option else "white"
+        screen.draw.text(option, center=(WIDTH // 2, HEIGHT // 2 + i * 50), fontsize=40, color=color)
+
+
+def draw_mission():
+    # Mensagem da missão
+    screen.draw.text(
+        "Mission: Defeat the zombies and don't get caught",
+        center=(WIDTH // 2, HEIGHT // 2 - 80),
+        fontsize=40,
+        color="white"
+    )
+
+    # Instruções de controle
+    instructions = [
+        "(Up) Jump",
+        "(Down) Crouch",
+        "(Left) Move left",
+        "(Right) Move right",
+        "(SPACE) Punch"
+    ]
+
+    # Desenhar as instruções
+    for i, instruction in enumerate(instructions):
+        screen.draw.text(
+            instruction,
+            center=(WIDTH // 2, HEIGHT // 2 + i * 30 - 20),
+            fontsize=30,
+            color="white"
+        )
+
+    # Mensagem "Press SPACE to continue"
+    screen.draw.text(
+        "Press SPACE to continue",
+        center=(WIDTH // 2, HEIGHT // 2 + 150),
+        fontsize=30,
+        color="yellow"
+    )
+
+
+def draw_game():
+    for platform in PLATFORMS:
+        screen.draw.filled_rect(platform, (100, 100, 100))
+    hero.actor.draw()
+    for enemy in enemies:
+        enemy.actor.draw()
+
 
 def update(dt):
-    global estado
-    if estado == JOGANDO:
-        atualizar_jogo(dt)
+    global state, show_mission, mission_time, victory, defeat, attack_time
 
-def atualizar_jogo(dt):
-    atualizar_heroi(dt)
-    atualizar_inimigos(dt)
-
-def atualizar_heroi(dt):
-    global estado
-    if estado != JOGANDO or heroi_agarrado:  # Não atualizar o herói se o jogo não estiver em andamento ou se ele estiver agarrado
-        return
-
-    # Lógica normal de movimento do herói
-    if keyboard.left:
-        heroi.x -= VELOCIDADE_MOVIMENTO * dt
-        heroi.direcao = -1  # Definir direção para esquerda
-        if heroi.no_chao and not heroi.socando:
-            animar_heroi(sprites_heroi_mover_esquerda, dt)
-    elif keyboard.right:
-        heroi.x += VELOCIDADE_MOVIMENTO * dt
-        heroi.direcao = 1  # Definir direção para direita
-        if heroi.no_chao and not heroi.socando:
-            animar_heroi(sprites_heroi_mover_direita, dt)
-    elif heroi.no_chao and not heroi.socando:
-        if heroi.direcao == -1:
-            animar_heroi(sprites_heroi_idle_esquerda, dt)
+    if state == PLAYING:
+        if defeat:
+            if keyboard.SPACE:
+                restart_game()
+        elif victory:
+            if keyboard.SPACE:
+                restart_game()
+        elif show_mission:
+            mission_time += dt
+            if keyboard.SPACE:
+                show_mission = False
         else:
-            animar_heroi(sprites_heroi_idle_direita, dt)
+            update_game(dt)
 
-    # Gravidade e pulo
-    heroi.velocidade_y += GRAVITY
-    heroi.y += heroi.velocidade_y
+            # Verificar se o herói está sendo agarrado
+            if hero.grabbed:
+                attack_time += dt
+                if attack_time >= 3.0:  # Esperar 3 segundos
+                    defeat = True  # Definir estado de derrota
 
-    # Verificar colisão com plataformas
-    heroi.no_chao = False
-    for plataforma in PLATAFORMAS:
-        if heroi.colliderect(plataforma) and heroi.velocidade_y > 0:
-            heroi.velocidade_y = 0
-            heroi.bottom = plataforma.top
-            heroi.no_chao = True
 
-    # Pulo
-    if keyboard.up and heroi.no_chao:
-        heroi.velocidade_y = VELOCIDADE_PULO
-        if heroi.direcao == -1:
-            heroi.image = sprites_heroi_pulo_esquerda[0]
-        else:
-            heroi.image = sprites_heroi_pulo_direita[0]
+def update_game(dt):
+    hero.update(dt)
+    for enemy in enemies[:]:  # Usar uma cópia da lista para evitar problemas ao remover itens
+        enemy.update(dt)
 
-    # Atualizar animação de soco
-    if heroi.socando:
-        animar_soco(dt)
+    # Verificar se todos os inimigos foram eliminados
+    if not enemies:  # Se a lista de inimigos estiver vazia
+        global victory
+        victory = True  # Definir estado de vitória
 
-def animar_heroi(sprites, dt):
-    heroi.ultima_animacao_tempo += dt
-    if heroi.ultima_animacao_tempo >= ANIMACAO_INTERVALO:
-        heroi.ultima_animacao_tempo = 0
-        heroi.frame_animacao = (heroi.frame_animacao + 1) % len(sprites)
-        heroi.image = sprites[heroi.frame_animacao]
-
-def animar_soco(dt):
-    global inimigos
-    heroi.ultima_animacao_tempo += dt
-    if heroi.ultima_animacao_tempo >= ANIMACAO_INTERVALO:
-        heroi.ultima_animacao_tempo = 0
-        heroi.frame_animacao += 1
-        if heroi.frame_animacao < len(sprites_heroi_soco_direita):
-            # Escolher o sprite de soco com base na direção do herói
-            if heroi.direcao == -1:
-                heroi.image = sprites_heroi_soco_esquerda[heroi.frame_animacao]
-            else:
-                heroi.image = sprites_heroi_soco_direita[heroi.frame_animacao]
-
-            # Verificar colisão com zumbis durante o soco
-            for inimigo in inimigos:
-                if heroi.colliderect(inimigo):
-                    inimigo.image = sprites_inimigo_ferido[0]  # Mudar para sprite de zumbi ferido
-                    inimigo.estado = "ferido"  # Atualizar estado do zumbi
-                    inimigo.tempo_ferido = 0  # Iniciar contador de tempo para desaparecer
-        else:
-            # Finalizar a animação de soco
-            heroi.socando = False
-            heroi.frame_animacao = 0
-            # Voltar para a animação de idle com base na direção
-            if heroi.direcao == -1:
-                heroi.image = sprites_heroi_idle_esquerda[0]
-            else:
-                heroi.image = sprites_heroi_idle_direita[0]
-
-def atualizar_inimigos(dt):
-    global inimigos, estado, tempo_ataque, heroi_agarrado
-    for inimigo in inimigos[:]:  # Usar uma cópia da lista para evitar problemas ao remover itens
-        if inimigo.estado == "ferido":
-            # Lógica para zumbi ferido (já implementada)
-            inimigo.tempo_ferido += dt
-            if inimigo.tempo_ferido >= 1.0:
-                inimigos.remove(inimigo)
-        elif inimigo.estado == "hold":
-            # Lógica para zumbi agarrando o herói
-            if inimigo.direcao == -1:
-                inimigo.image = sprites_inimigo_hold_esquerda[0]
-            else:
-                inimigo.image = sprites_inimigo_hold_direita[0]
-
-            # Mudar o sprite do herói para "hurt" com base na direção do zumbi
-            if inimigo.direcao == -1:
-                heroi.image = sprites_heroi_hurt[0]  # Herói ferido para a direita
-            else:
-                heroi.image = sprites_heroi_hurt_esquerda[0]  # Herói ferido para a esquerda
-
-            # Iniciar o contador de tempo de ataque
-            tempo_ataque += dt
-            if tempo_ataque >= 3.0:  # Esperar 3 segundos
-                reiniciar_jogo()  # Reiniciar o jogo
-                return  # Sair da função para evitar atualizações adicionais
-        else:
-            # Lógica normal de movimento do zumbi
-            inimigo.tempo_estado += dt
-            if inimigo.tempo_estado >= 5:
-                inimigo.tempo_estado = 0
-                inimigo.estado = "parado" if inimigo.estado == "movendo" else "movendo"
-
-            if inimigo.estado == "movendo":
-                inimigo.x += inimigo.direcao * VELOCIDADE_MOVIMENTO * dt
-                if inimigo.right > WIDTH:
-                    inimigo.right = WIDTH
-                    inimigo.direcao *= -1
-                elif inimigo.left < 0:
-                    inimigo.left = 0
-                    inimigo.direcao *= -1
-                if inimigo.direcao == -1:
-                    animar_inimigo(inimigo, sprites_inimigo_mover_esquerda, dt)
-                else:
-                    animar_inimigo(inimigo, sprites_inimigo_mover_direita, dt)
-            else:
-                if inimigo.direcao == -1:
-                    animar_inimigo(inimigo, sprites_inimigo_idle_esquerda, dt)
-                else:
-                    animar_inimigo(inimigo, sprites_inimigo_idle_direita, dt)
-
-            # Verificar se o herói está próximo o suficiente para ser agarrado
-            if not heroi_agarrado and abs(heroi.x - inimigo.x) < 50 and abs(heroi.y - inimigo.y) < 50:
-                inimigo.estado = "hold"  # Mudar para estado de "hold"
-                inimigo.direcao = 1 if heroi.x > inimigo.x else -1  # Direção do zumbi ao agarrar
-                heroi_agarrado = True  # Marcar o herói como agarrado
-                tempo_ataque = 0  # Reiniciar o contador de tempo de ataque
-
-def animar_inimigo(inimigo, sprites, dt):
-    inimigo.ultima_animacao_tempo += dt
-    if inimigo.ultima_animacao_tempo >= ANIMACAO_INTERVALO:
-        inimigo.ultima_animacao_tempo = 0
-        inimigo.frame_animacao = (inimigo.frame_animacao + 1) % len(sprites)
-        inimigo.image = sprites[inimigo.frame_animacao]
 
 def on_key_down(key):
-    global estado, musica_ligada
-    if estado == MENU:
-        if key == keys.K_1:
-            estado = JOGANDO
-            iniciar_jogo()
-        elif key == keys.K_2:
-            musica_ligada = not musica_ligada
-            if musica_ligada:
-                music.play('background_music')
-            else:
-                music.stop()
-        elif key == keys.K_3:
-            quit()
-    elif estado == JOGANDO:
-        if key == keys.SPACE and not heroi.socando:
-            heroi.socando = True
-            heroi.frame_animacao = 0  # Reiniciar a animação de soco
+    global state, music_on, selected_option
 
-def iniciar_jogo():
-    global heroi, inimigos
-    heroi.pos = (WIDTH // 2, HEIGHT - 100)
-    heroi.velocidade_y = 0
-    heroi.ultima_animacao_tempo = 0
-    heroi.frame_animacao = 0
-    heroi.socando = False
-    heroi.direcao = 1  # Começar virado para a direita
-    # Posicionar zumbis sobre o chão
-    inimigos = [Actor('zombie/zombie_idle', (random.randint(0, WIDTH), HEIGHT - 70 - 20)) for _ in range(2)]
-    for inimigo in inimigos:
-        inimigo.direcao = random.choice([-1, 1])  # Direção inicial do inimigo
-        inimigo.ultima_animacao_tempo = 0
-        inimigo.frame_animacao = 0
-        inimigo.estado = "movendo"  # Estado inicial: movendo
-        inimigo.tempo_estado = 0  # Contador de tempo para alternar estados
-        inimigo.tempo_ferido = 0  # Contador de tempo para desaparecer quando ferido
-    if musica_ligada:
+    if state == MENU:
+        if key == keys.DOWN:
+            selected_option = (selected_option + 1) % 3
+        elif key == keys.UP:
+            selected_option = (selected_option - 1) % 3
+        elif key == keys.RETURN:
+            if selected_option == 0:
+                state = PLAYING
+                start_game()
+            elif selected_option == 1:
+                music_on = not music_on
+                if music_on:
+                    music.play('background_music')
+                else:
+                    music.stop()
+            elif selected_option == 2:
+                quit()
+    elif state == PLAYING:
+        if key == keys.SPACE and not hero.punching:
+            hero.punching = True
+            hero.animation_frame = 0
+
+
+def start_game():
+    global hero, enemies, show_mission, mission_time
+    hero.actor.pos = (WIDTH // 2, HEIGHT - 200)
+    hero.velocity_y = 0
+    hero.last_animation_time = 0
+    hero.animation_frame = 0
+    hero.punching = False
+    hero.direction = 1
+    hero.grabbed = False
+    enemies = [Enemy(random.randint(0, WIDTH), HEIGHT - 74 - 20) for _ in range(2)]
+    if music_on:
         music.play('background_music')
 
-def reiniciar_jogo():
-    global estado, tempo_ataque, heroi, inimigos, heroi_agarrado
-    estado = JOGANDO  # Voltar ao estado de jogo
-    tempo_ataque = 0  # Reiniciar o contador de tempo de ataque
-    heroi_agarrado = False  # Reiniciar o estado do herói
-    iniciar_jogo()  # Reiniciar o jogo
+    show_mission = True
+    mission_time = 0
+
+
+def restart_game():
+    global state, attack_time, hero, enemies, victory, defeat
+    state = PLAYING
+    attack_time = 0
+    hero.grabbed = False
+    victory = False
+    defeat = False
+    start_game()
+
+
+def draw_victory():
+    screen.draw.text(
+        "You Win!",
+        center=(WIDTH // 2, HEIGHT // 2 - 50),
+        fontsize=60,
+        color="green"
+    )
+    screen.draw.text(
+        "Press SPACE to restart",
+        center=(WIDTH // 2, HEIGHT // 2 + 50),
+        fontsize=40,
+        color="yellow"
+    )
+
+
+def draw_defeat():
+    screen.draw.text(
+        "You Lose!",
+        center=(WIDTH // 2, HEIGHT // 2 - 50),
+        fontsize=60,
+        color="red"
+    )
+    screen.draw.text(
+        "Press SPACE to try again",
+        center=(WIDTH // 2, HEIGHT // 2 + 50),
+        fontsize=40,
+        color="yellow"
+    )
+
 
 # Iniciar o jogo
 pgzrun.go()
