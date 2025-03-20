@@ -3,15 +3,14 @@ import random
 from pygame import Rect
 
 # Configurações da janela
-WIDTH = 1200
+WIDTH = 1000
 HEIGHT = 600
-TITLE = "Platformer Game"
 
 # Gravidade e movimento
 GRAVITY = 0.4
 JUMP_VELOCITY = -10
-MOVE_VELOCITY = 150  # Pixels por segundo
-ANIMATION_INTERVAL = 0.2  # Segundos entre cada frame de animação
+MOVE_VELOCITY = 150
+ANIMATION_INTERVAL = 0.2
 
 # Estados do jogo
 MENU = 0
@@ -24,13 +23,28 @@ mission_time = 0
 victory = False
 defeat = False
 
+menu_options = ["Start Game", "Music: On", "Quit"]
+hovered_option = None 
+
 # Plataformas
 PLATFORMS = [
     Rect(0, HEIGHT - 40, WIDTH, 40),  # Chão
-    Rect(180, HEIGHT - 300, 200, 20),  # Plataforma 1
-    Rect(500, HEIGHT - 180, 200, 20),  # Plataforma 2
-    Rect(820, HEIGHT - 300, 200, 20),  # Plataforma 3
+    Rect(100, HEIGHT - 300, 200, 10),  # Plataforma 1
+    Rect(380, HEIGHT - 180, 200, 10),  # Plataforma 2
+    Rect(650, HEIGHT - 300, 200, 10),  # Plataforma 3
 ]
+
+# Carregar o tile
+TILE = "tiles/tundrahalf"
+TILE_WIDTH = 40
+TILE_HEIGHT = 40 
+
+background = Actor("winter")
+background_menu = Actor("zombiesurvival")
+
+# Ajustar o tamanho da imagem de fundo para cobrir toda a tela
+background.width = WIDTH 
+background.height = HEIGHT
 
 # Música e sons
 music_on = True
@@ -46,7 +60,7 @@ class Hero:
         self.last_animation_time = 0
         self.animation_frame = 0
         self.punching = False
-        self.direction = 1  # 1 para direita, -1 para esquerda
+        self.direction = 1
         self.grabbed = False
         self.crouching = False
 
@@ -247,6 +261,8 @@ enemies = []
 
 def draw():
     screen.clear()
+    background.draw() 
+
     if state == MENU:
         draw_menu()
     elif state == PLAYING:
@@ -262,19 +278,53 @@ def draw():
 
 def draw_menu():
     screen.clear()
-    screen.draw.text("Platformer Game", center=(WIDTH // 2, HEIGHT // 4), fontsize=60, color="white")
+    background_menu.draw()
+    # Desenhar as opções do menu
+    for i, option in enumerate(menu_options):
+        # Verificar se o mouse está sobre a opção
+        if hovered_option == i:
+            color = "yellow"  # Cor de hover
+        else:
+            color = "white"  # Cor normal
 
-    # Opções do menu
-    options = [
-        "Start Game",
-        "Music: " + ("On" if music_on else "Off"),
-        "Quit"
-    ]
-
-    # Desenhar as opções
-    for i, option in enumerate(options):
-        color = "yellow" if i == selected_option else "white"
+        # Desenhar o texto da opção
         screen.draw.text(option, center=(WIDTH // 2, HEIGHT // 2 + i * 50), fontsize=40, color=color)
+
+def on_mouse_down(pos):
+    global state, music_on, hovered_option
+
+    if state == MENU:
+        # Verificar em qual opção o jogador clicou
+        for i, option in enumerate(menu_options):
+            # Calcular a área clicável da opção
+            option_rect = Rect(WIDTH // 2 - 100, HEIGHT // 2 + i * 50 - 20, 200, 40)
+            if option_rect.collidepoint(pos):
+                if i == 0:  # Start Game
+                    state = PLAYING
+                    start_game()
+                elif i == 1:  # Toggle Music
+                    music_on = not music_on
+                    menu_options[1] = "Music: On" if music_on else "Music: Off"
+                    if music_on:
+                        music.play('background_music')
+                    else:
+                        music.stop()
+                elif i == 2:  # Quit
+                    quit()
+
+
+def on_mouse_move(pos):
+    global hovered_option
+
+    if state == MENU:
+        # Verificar se o mouse está sobre alguma opção
+        hovered_option = None
+        for i, option in enumerate(menu_options):
+            # Calcular a área clicável da opção
+            option_rect = Rect(WIDTH // 2 - 100, HEIGHT // 2 + i * 50 - 20, 200, 40)
+            if option_rect.collidepoint(pos):
+                hovered_option = i
+                break
 
 
 def draw_mission():
@@ -314,8 +364,17 @@ def draw_mission():
 
 
 def draw_game():
+    # Desenhar as plataformas com tiles
     for platform in PLATFORMS:
-        screen.draw.filled_rect(platform, (100, 100, 100))
+        # Calcular quantos tiles são necessários para preencher a plataforma
+        num_tiles = int(platform.width / TILE_WIDTH)
+        for i in range(num_tiles):
+            screen.blit(
+                TILE,
+                (platform.x + i * TILE_WIDTH, platform.y)
+            )
+
+    # Desenhar o herói e os inimigos
     hero.actor.draw()
     for enemy in enemies:
         enemy.actor.draw()
@@ -341,45 +400,35 @@ def update(dt):
             # Verificar se o herói está sendo agarrado
             if hero.grabbed:
                 attack_time += dt
-                if attack_time >= 3.0:  # Esperar 3 segundos
-                    defeat = True  # Definir estado de derrota
+                if attack_time >= 3.0:
+                    defeat = True
 
 
 def update_game(dt):
     hero.update(dt)
-    for enemy in enemies[:]:  # Usar uma cópia da lista para evitar problemas ao remover itens
+    for enemy in enemies[:]:
         enemy.update(dt)
 
     # Verificar se todos os inimigos foram eliminados
-    if not enemies:  # Se a lista de inimigos estiver vazia
+    if not enemies:
         global victory
-        victory = True  # Definir estado de vitória
+        victory = True
 
 
 def on_key_down(key):
-    global state, music_on, selected_option
+    global state, show_mission
 
-    if state == MENU:
-        if key == keys.DOWN:
-            selected_option = (selected_option + 1) % 3
-        elif key == keys.UP:
-            selected_option = (selected_option - 1) % 3
-        elif key == keys.RETURN:
-            if selected_option == 0:
-                state = PLAYING
-                start_game()
-            elif selected_option == 1:
-                music_on = not music_on
-                if music_on:
-                    music.play('background_music')
-                else:
-                    music.stop()
-            elif selected_option == 2:
-                quit()
-    elif state == PLAYING:
+    if state == PLAYING:
         if key == keys.SPACE and not hero.punching:
             hero.punching = True
             hero.animation_frame = 0
+        elif key == keys.ESCAPE:  # Voltar ao menu
+            state = MENU
+            show_mission = False
+            if music_on:
+                music.play('background_music')
+            else:
+                music.stop()
 
 
 def start_game():
@@ -395,17 +444,20 @@ def start_game():
     if music_on:
         music.play('background_music')
 
-    show_mission = True
+    # Mostrar a tela de missão apenas ao iniciar o jogo, não ao voltar ao menu
+    if state == PLAYING:
+        show_mission = True
     mission_time = 0
 
 
 def restart_game():
-    global state, attack_time, hero, enemies, victory, defeat
+    global state, attack_time, hero, enemies, victory, defeat, show_mission
     state = PLAYING
     attack_time = 0
     hero.grabbed = False
     victory = False
     defeat = False
+    show_mission = False
     start_game()
 
 
@@ -427,14 +479,21 @@ def draw_victory():
 def draw_defeat():
     screen.draw.text(
         "You Lose!",
-        center=(WIDTH // 2, HEIGHT // 2 - 50),
+        center=(WIDTH // 2, HEIGHT // 2 - 100),
         fontsize=60,
         color="red"
     )
     screen.draw.text(
         "Press SPACE to try again",
-        center=(WIDTH // 2, HEIGHT // 2 + 50),
+        center=(WIDTH // 2, HEIGHT // 2 + 30),
         fontsize=40,
+        color="yellow"
+    )
+
+    screen.draw.text(
+        "Tip: If you crounch down, the zombies won't get you",
+        center=(WIDTH // 2, HEIGHT // 2 + 100),
+        fontsize=30,
         color="yellow"
     )
 
