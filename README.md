@@ -1,6 +1,6 @@
-Zombie Survival!
+# Zombie Survival!
 
-# Jogo desenvolvido em Python para o teste da Kodland
+! Jogo desenvolvido em Python para o teste da Kodland
 
 Livre-se dos zombies que atormentam seu chalé, mas cuidado para não ser mordido.
 
