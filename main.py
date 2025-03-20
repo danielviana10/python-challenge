@@ -22,16 +22,15 @@ show_mission = True
 mission_time = 0
 victory = False
 defeat = False
-
-menu_options = ["Start Game", "Music: On", "Quit"]
+menu_options = ["Start Game", "Music: Off", "Quit"]
 hovered_option = None 
 
 # Plataformas
 PLATFORMS = [
     Rect(0, HEIGHT - 40, WIDTH, 40),  # Chão
-    Rect(100, HEIGHT - 300, 200, 10),  # Plataforma 1
-    Rect(380, HEIGHT - 180, 200, 10),  # Plataforma 2
-    Rect(650, HEIGHT - 300, 200, 10),  # Plataforma 3
+    Rect(100, HEIGHT - 300, 200, 10),  # P1
+    Rect(380, HEIGHT - 180, 200, 10),  # P2
+    Rect(650, HEIGHT - 300, 200, 10),  # P3
 ]
 
 # Carregar o tile
@@ -42,21 +41,28 @@ TILE_HEIGHT = 40
 background = Actor("winter")
 background_menu = Actor("zombiesurvival")
 
-# Ajustar o tamanho da imagem de fundo para cobrir toda a tela
+# Ajuste do tamanho da imagem de fundo
 background.width = WIDTH 
 background.height = HEIGHT
 
 # Música e sons
-music_on = True
+music_on = False
 sound_on = True
 
+# Sons da pasta sounds
+jump_sound = sounds.jump
+land_sound = sounds.land 
+punch_sound = sounds.punch
+zombie_grab_sound = sounds.zombie_grab
 
-# Classe para o Herói
+
+# Classe Herói
 class Hero:
     def __init__(self, x, y):
         self.actor = Actor('adventurer/adventurer_idle', (x, y))
         self.velocity_y = 0
         self.on_ground = False
+        self.was_in_air = False
         self.last_animation_time = 0
         self.animation_frame = 0
         self.punching = False
@@ -117,9 +123,17 @@ class Hero:
         self.on_ground = False
         for platform in PLATFORMS:
             if self.actor.colliderect(platform) and self.velocity_y > 0:
+                if not self.on_ground:
+                    if self.was_in_air:
+                        land_sound.play()
+                        self.was_in_air = False 
                 self.velocity_y = 0
                 self.actor.bottom = platform.top
                 self.on_ground = True
+
+        # Estado was in air
+        if not self.on_ground:
+            self.was_in_air = True
 
         # Pulo
         if keyboard.up and self.on_ground and not self.crouching:
@@ -128,6 +142,7 @@ class Hero:
                 self.actor.image = self.jump_left_sprites[0]
             else:
                 self.actor.image = self.jump_right_sprites[0]
+            jump_sound.play()
 
         # Atualizar animação de soco
         if self.punching:
@@ -159,11 +174,11 @@ class Hero:
             else:
                 self.punching = False
                 self.animation_frame = 0
+                punch_sound.play() 
                 if self.direction == -1:
                     self.actor.image = self.idle_left_sprites[0]
                 else:
-                    self.actor.image = self.idle_right_sprites[0]
-
+                    self.actor.image = self.idle_right_sprites[0] 
 
 # Classe para os Inimigos
 class Enemy:
@@ -202,9 +217,9 @@ class Enemy:
                 hero.actor.x = self.actor.x + (20 if self.direction == 1 else -20)
                 hero.actor.y = self.actor.y
                 if self.direction == -1:
-                    hero.actor.image = hero.hurt_left_sprites[0]
-                else:
                     hero.actor.image = hero.hurt_sprites[0]
+                else:
+                    hero.actor.image = hero.hurt_left_sprites[0]
         else:
             self.state_time += dt
             if self.state_time >= 5:
@@ -231,12 +246,13 @@ class Enemy:
 
             # Verificar se o herói está próximo o suficiente para ser agarrado
             if not hero.grabbed and abs(hero.actor.x - self.actor.x) < 50 and abs(hero.actor.y - self.actor.y) < 50:
-                if not hero.crouching:  # Só capturar se o herói não estiver agachado
-                    self.state = "hold"  # Mudar para estado de "hold"
-                    self.direction = 1 if hero.actor.x > self.actor.x else -1  # Direção do zumbi ao agarrar
-                    hero.grabbed = True  # Marcar o herói como agarrado
+                if not hero.crouching:
+                    self.state = "hold"
+                    self.direction = 1 if hero.actor.x > self.actor.x else -1 
+                    hero.grabbed = True 
+                    zombie_grab_sound.play()
                     global attack_time
-                    attack_time = 0  # Reiniciar o contador de tempo de ataque
+                    attack_time = 0
 
     def animate(self, sprites, dt):
         self.last_animation_time += dt
@@ -268,7 +284,7 @@ def draw():
     elif state == PLAYING:
         if defeat:
             draw_defeat()
-        elif victory:  # Verificar se o jogador venceu
+        elif victory:
             draw_victory()
         elif show_mission:
             draw_mission()
@@ -283,9 +299,9 @@ def draw_menu():
     for i, option in enumerate(menu_options):
         # Verificar se o mouse está sobre a opção
         if hovered_option == i:
-            color = "yellow"  # Cor de hover
+            color = "yellow" 
         else:
-            color = "white"  # Cor normal
+            color = "white"
 
         # Desenhar o texto da opção
         screen.draw.text(option, center=(WIDTH // 2, HEIGHT // 2 + i * 50), fontsize=40, color=color)
@@ -419,10 +435,10 @@ def on_key_down(key):
     global state, show_mission
 
     if state == PLAYING:
-        if key == keys.SPACE and not hero.punching:
+        if key == keys.SPACE and not hero.punching and not show_mission:
             hero.punching = True
             hero.animation_frame = 0
-        elif key == keys.ESCAPE:  # Voltar ao menu
+        elif key == keys.ESCAPE:
             state = MENU
             show_mission = False
             if music_on:
