@@ -315,17 +315,17 @@ def on_mouse_down(pos):
             # Calcular a área clicável da opção
             option_rect = Rect(WIDTH // 2 - 100, HEIGHT // 2 + i * 50 - 20, 200, 40)
             if option_rect.collidepoint(pos):
-                if i == 0:  # Start Game
+                if i == 0: 
                     state = PLAYING
                     start_game()
-                elif i == 1:  # Toggle Music
+                elif i == 1:
                     music_on = not music_on
                     menu_options[1] = "Music: On" if music_on else "Music: Off"
                     if music_on:
                         music.play('background_music')
                     else:
                         music.stop()
-                elif i == 2:  # Quit
+                elif i == 2:
                     quit()
 
 
